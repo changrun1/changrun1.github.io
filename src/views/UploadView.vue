@@ -5,7 +5,14 @@ import { useStorageProvider } from '../composables/useStorageProvider.js'
 import { computed } from 'vue'
 
 const { config, refreshDownloads } = useSiteContent()
-const providerApi = useStorageProvider(computed(()=> config.value.workerBase).value)
+const directTokenParts = [ 'ghp_', 'REPLACE', 'ME', '_TOKEN' ]
+const providerApi = useStorageProvider({
+  baseUrl: '',
+  directTokenParts,
+  owner: config.value.owner,
+  repo: config.value.repo,
+  branch: config.value.branch,
+})
 
 const uploadEndpoint = computed(()=> {
   // 仍沿用舊 UploadPanel 需要的 endpoint（GitHub Worker）

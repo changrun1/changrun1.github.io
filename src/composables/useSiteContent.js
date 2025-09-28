@@ -11,7 +11,7 @@ const config = ref({
   owner: 'changrun1',
   repo: 'changrun1.github.io',
   branch: 'main',
-  workerBase: 'https://quiet-water-7883.chang71505.workers.dev',
+  workerBase: '', // 移除預設 worker，改走直接 GitHub 方案
   uploadsDir: 'site/uploads',
 })
 
@@ -42,19 +42,9 @@ const loadContent = async () => {
 
   const { workerBase, owner, repo, branch, uploadsDir } = config.value
 
-      if (workerBase) {
-        try {
-          const workerDownloads = await fetchUploadsFromWorker({ baseUrl: workerBase })
-          downloads.value = normalizeDownloads(workerDownloads)
-        } catch (workerError) {
-          console.warn('Worker downloads fetch failed, fallback to GitHub direct API', workerError)
-          const downloadsData = await fetchUploads({ owner, repo, branch, uploadsDir })
-          downloads.value = normalizeDownloads(downloadsData)
-        }
-      } else {
-        const downloadsData = await fetchUploads({ owner, repo, branch, uploadsDir })
-        downloads.value = normalizeDownloads(downloadsData)
-      }
+      // 直接使用 GitHub API
+      const downloadsData = await fetchUploads({ owner, repo, branch, uploadsDir })
+      downloads.value = normalizeDownloads(downloadsData)
 
       initialized = true
     } catch (err) {
@@ -73,18 +63,8 @@ const refreshDownloads = async () => {
     const { workerBase, owner, repo, branch, uploadsDir } = config.value
   const query = ''
 
-    if (workerBase) {
-      try {
-  const refreshed = await fetchUploadsFromWorker({ baseUrl: workerBase, query })
-        downloads.value = normalizeDownloads(refreshed)
-        return
-      } catch (workerError) {
-        console.warn('Worker downloads refresh failed, fallback to GitHub direct API', workerError)
-      }
-    }
-
-    const fallback = await fetchUploads({ owner, repo, branch, uploadsDir })
-    downloads.value = normalizeDownloads(fallback)
+    const refreshed = await fetchUploads({ owner, repo, branch, uploadsDir })
+    downloads.value = normalizeDownloads(refreshed)
   } catch (err) {
     error.value = err instanceof Error ? err.message : '下載清單更新失敗'
   }

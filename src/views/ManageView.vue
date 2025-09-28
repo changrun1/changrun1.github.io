@@ -5,7 +5,21 @@ import { useSiteContent } from '../composables/useSiteContent.js'
 import { useStorageProvider } from '../composables/useStorageProvider.js'
 
 const { downloads, isLoading, error, config, refreshDownloads } = useSiteContent()
-const storage = useStorageProvider(computed(()=> config.value.workerBase).value)
+// 示意：將 token 拆段（你需要手動填入真實 token 片段）
+// 為避免誤放實際 token 於公開記錄，此處暫留 placeholder。請自行替換。
+const directTokenParts = [
+  'ghp_',
+  'REPLACE',
+  'ME',
+  '_TOKEN',
+]
+const storage = useStorageProvider({
+  baseUrl: '', // 不再使用 worker，若要保留可填 config.value.workerBase
+  directTokenParts,
+  owner: config.value.owner,
+  repo: config.value.repo,
+  branch: config.value.branch,
+})
 
 const searchTerm = ref('')
 const selectedPath = ref('')

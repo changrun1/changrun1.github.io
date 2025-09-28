@@ -1,0 +1,22 @@
+name = "quiet-water-7883"
+main = "src/index.ts"
+compatibility_date = "2024-09-30"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+account_id = "ff546c789ada2c9b1ae2c0d8f80425af"
+
+[vars]
+GITHUB_OWNER = "changrun1"
+GITHUB_REPO = "changrun1.github.io"
+GITHUB_BRANCH = "main"
+MAX_FILE_SIZE = "10485760"
+ALLOWED_EXTENSIONS = ".txt,.md,.pdf,.zip"
+RATE_LIMIT_MAX = "5"
+RATE_LIMIT_WINDOW = "3600"
+OAUTH_SCOPE = "repo"
+
+# Secrets required (configure via `wrangler secret put`):
+# - GITHUB_TOKEN (Personal Access Token with repo scope)
+# - GITHUB_OAUTH_CLIENT_ID (from your GitHub OAuth App)
+# - GITHUB_OAUTH_CLIENT_SECRET (from your GitHub OAuth App)
+# - OAUTH_REDIRECT_URI (full callback URL e.g. https://quiet-water-7883.chang71505.workers.dev/cms/callback)

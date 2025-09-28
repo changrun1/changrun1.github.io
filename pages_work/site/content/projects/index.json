@@ -1,0 +1,37 @@
+{
+  "projects": [
+    {
+      "slug": "atlas-content-platform",
+      "title": "Atlas Content Platform",
+      "description": "企業級內容平台，提供多品牌支援、模組化內容模型與即時預覽功能。",
+      "tech": ["Vue", "Decap CMS", "Cloudflare"],
+      "type": "Content System",
+      "repo": "https://github.com/changrun1/atlas",
+      "url": "https://atlas.example.com",
+      "cover": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
+      "updatedAt": "2024-05-12T00:00:00.000Z"
+    },
+    {
+      "slug": "insight-dashboard",
+      "title": "Insight Dashboard",
+      "description": "資料視覺化儀表板，支援即時串流與故事敘事的互動模式。",
+      "tech": ["D3.js", "Vue", "Supabase"],
+      "type": "Data Experience",
+      "repo": "https://github.com/changrun1/insight-dashboard",
+      "url": "https://insight.example.com",
+      "cover": "https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80",
+      "updatedAt": "2023-11-02T00:00:00.000Z"
+    },
+    {
+      "slug": "community-ops-kit",
+      "title": "Community Ops Kit",
+      "description": "社群營運工具組，整合報名、贊助、內容管理的開源專案。",
+      "tech": ["Nuxt", "Firebase", "Tailwind"],
+      "type": "Open Source",
+      "repo": "https://github.com/changrun1/community-ops-kit",
+      "url": "https://community.example.com",
+      "cover": "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80",
+      "updatedAt": "2024-01-28T00:00:00.000Z"
+    }
+  ]
+}

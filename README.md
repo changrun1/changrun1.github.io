@@ -1,52 +1,74 @@
-﻿# File Share (Direct GitHub Runtime Token)
+﻿# File Share (Embedded Obfuscated Token)
 
-此版本移除 Cloudflare Worker，改為「前端直接呼叫 GitHub Contents API」。Token 不再硬寫在程式碼，而是啟動後由瀏覽器使用者輸入並存在 localStorage（key: `gh:token`）。
+此版本：
+* 已移除 Cloudflare Worker（備份在分支 `worker-version-backup`）。
+* GitHub PAT 以「多層混淆」方式嵌入前端程式（非使用者 runtime 輸入）。
+* 混淆目標：避開最粗糙的字串掃描、降低直接搜尋關鍵字 `github_pat_` 或 `ghp_` 被攔截的機率。
+* 再次強調：這 **不是安全機制**，任何人能下載 bundle 就能還原。僅用於你本人臨時、低風險、低流量自用情境。
 
-> 備份：原 Worker 版在分支 `worker-version-backup`。
+## 功能摘要
+* 上傳：`PUT /repos/:owner/:repo/contents/site/uploads/<檔名>`
+* 刪除：取得 sha 後 `DELETE /contents/...`
+* 列出：`GET /contents/site/uploads`
+* 命名：`<ISO 時間戳>-<簡化名稱>.<副檔>` 避免覆蓋
+* Provider：`github-embedded` (內嵌混淆 Token)
 
-## 目前行為
-* 上傳：直接以 GitHub API `PUT /repos/:owner/:repo/contents/site/uploads/<檔名>` 寫入。
-* 刪除：先 GET 取得 `sha`，再 `DELETE`。
-* 列出：`GET /contents/site/uploads` 讀取檔案列表。
-* 檔名：`<ISO 時間戳>-<簡化名稱>.<副檔>`，避免覆蓋。
+## 混淆流程概念
+1. 使用腳本 `scripts/obfuscate-token.mjs` 將原始 PAT 切片 + 插入假片段。
+2. 片段亂序後對真實片段做 XOR → base64。
+3. 產出 JSON 結構：`{ v,k,s,o }`：
+	* `k`: XOR key (hex)
+	* `s`: 切片陣列（含真假片段、各自 base64 編碼）
+	* `o`: 真實片段索引序列（還原順序）
+4. 貼到 `src/services/secretToken.js` 的 `OBF_DATA`。
+5. 執行 build 時 token 會跟著被打包（可逆）。
 
-## Token 使用流程 (runtime)
-1. 到 GitHub Developer settings 產生 fine‑grained PAT（僅此 repo，Content: Read/Write）。
-2. 首次開啟「管理」頁時，輸入 Token 並儲存；頁面會重新載入。
-3. Token 會被切片後組合送出 API，僅存於瀏覽器 localStorage，不進入程式碼版本控制。
-4. 要移除：管理頁點「移除」按鈕或手動清除 localStorage。
+## 使用方式（嵌入或更新 Token）
+1. 建 fine‑grained PAT：限制單一 repo，僅 Content Read/Write。
+2. 於專案根目錄執行：
+	```bash
+	node scripts/obfuscate-token.mjs <你的PAT> ./scripts/obf.json
+	```
+3. 開啟 `scripts/obf.json` 複製整個 JSON 物件內容。
+4. 貼到 `src/services/secretToken.js` 將 `const OBF_DATA = null` 改為：
+	```js
+	const OBF_DATA = { ...複製的 JSON ... }
+	```
+5. （可選）刪除 `scripts/obf.json`，避免誤傳。
+6. build/deploy。
 
-### 風險與提醒
-* 前端環境無法真正保護 Token（DevTools 可查看）。
-* 避免公開部署網址；若外流立即 Revoke & 重發。
-* 不適合多人共用或大量流量情境。
+## 主要檔案
+* `scripts/obfuscate-token.mjs`：產生混淆 JSON。
+* `src/services/secretToken.js`：還原方法 `getEmbeddedToken()`。
+* `src/services/storageProviders.js`：新增 `createEmbeddedGitHubProvider`。
+* `src/composables/useStorageProvider.js`：加入 `useEmbeddedToken` 參數。
+* `src/views/ManageView.vue`、`UploadView.vue`：移除 runtime token UI。
 
-## 主要檔案調整
-* `src/services/storageProviders.js` 新增 `github-direct` provider。
-* `src/composables/useStorageProvider.js` 支援 `directTokenParts`。
-* `src/views/ManageView.vue`、`UploadView.vue` 改用 runtime token direct provider。
-* `src/composables/useSiteContent.js` 取消 worker fallback。
-* 已移除 `cloudflare/worker/` 目錄（見備份分支）。
+## 風險 & 限制 (請完整閱讀)
+| 項目 | 說明 |
+|------|------|
+| 洩漏風險 | 任何人可格式化/還原混淆資料取得原始 Token。 |
+| Push Protection | GitHub 仍可能偵測到（尤其若 PAT 前綴保留原樣）。如遭阻擋需於 PR / push 介面手動允許（極不建議）。 |
+| 濫用 | 網址公開後他人即可代你上傳/刪除。 |
+| 撤銷 | 一旦懷疑外流：Revoke PAT → 重新產生 → 重新 obfuscate → 重建部署。 |
+| 不適用 | 公開分享、多人協作、商業或任何需要審計/權限控管的場景。 |
 
-## 回到舊版（含 Worker）
+## 建議 (仍想用時)
+* 使用最小權限、最短期限的 PAT。
+* 避免將 repo 設為公開（或另外 fork 私有）。
+* 必要時自建簡易後端加一層權杖驗證。 
+
+## 回到 runtime 輸入模式
+檢出上一提交或還原 `ManageView.vue`、`UploadView.vue` 內的 token input 區塊，自行改回 `useStorageProvider({ directTokenParts })`。
+
+## 回到 Worker 版本
 ```bash
 git checkout worker-version-backup
 ```
-
-## 風險聲明
-此模式不適合：
-* 公開網站
-* 匿名多人上傳
-* 想避免 token 洩漏
-
-用途僅限作者本機 / 私人使用測試。若 token 遭濫用：
-1. Revoke PAT。
-2. 產生新 PAT 並重新輸入。
-3. 檢查最近 commit 是否被竄改並 revert。
 
 ## 授權
 MIT
 
 ---
-如果你不是作者本人，請勿複製此做法到公開專案；請改用後端 / 邊緣服務封裝。
+此做法僅供個人快速自用測試示範。不要在任何需要真正安全的情境使用嵌入式 PAT。
 

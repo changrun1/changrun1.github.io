@@ -189,8 +189,165 @@ function createGitHubDirectProvider({ owner, repo, branch = 'main', tokenParts =
   }
 }
 
+// --- Embedded GitHub Provider (使用編譯期嵌入且混淆的 Token) ---
+// 與 Direct Provider 幾乎相同，但 token 來源改由 getEmbeddedToken() 還原。
+// 注意：仍可被逆向，僅提升掃描成本。
+import { getEmbeddedToken } from './secretToken.js'
+
+function createEmbeddedGitHubProvider({ owner, repo, branch = 'main' }) {
+  let token = ''
+  try {
+    token = getEmbeddedToken()
+  } catch (e) {
+    // 若未嵌入，回傳 disabled provider
+    return {
+      id: 'github-embedded-disabled',
+      label: 'GitHub Embedded (未嵌入)',
+      capabilities: { list: false, upload: false, delete: false, deleteAll: false },
+      async list() { return [] },
+      async upload() { throw new Error('未嵌入 token') },
+      async delete() { throw new Error('未嵌入 token') },
+      async deleteAll() { throw new Error('未嵌入 token') },
+    }
+  }
+  if (!owner || !repo || !token) {
+    return {
+      id: 'github-embedded-disabled2',
+      label: 'GitHub Embedded (缺參數)',
+      capabilities: { list: false, upload: false, delete: false, deleteAll: false },
+      async list() { return [] },
+      async upload() { throw new Error('缺參數') },
+      async delete() { throw new Error('缺參數') },
+      async deleteAll() { throw new Error('缺參數') },
+    }
+  }
+  const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/site/uploads`
+  const stdHeaders = () => ({
+    'Authorization': `Bearer ${token}`,
+    'Accept': 'application/vnd.github+json',
+  })
+
+  async function list() {
+    const res = await fetch(`${apiBase}?ref=${branch}`, { headers: stdHeaders(), cache: 'no-store' })
+    if (res.status === 404) return []
+    if (!res.ok) throw new Error('GitHub 目錄列出失敗')
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+    return data
+      .filter(f => f.type === 'file' && !f.name.startsWith('.'))
+      .map(f => ({
+        name: f.name,
+        path: f.path,
+        size: f.size,
+        downloadUrl: f.download_url,
+        htmlUrl: f.html_url,
+        updatedAt: null,
+        extension: (() => { const i = f.name.lastIndexOf('.'); return i > 0 ? f.name.slice(i + 1).toLowerCase() : '' })(),
+        isText: true,
+      }))
+      .sort((a, b) => b.name.localeCompare(a.name))
+  }
+
+  async function upload(parts) {
+    const { file, message, customName, textExt } = parts || {}
+    const nowTs = new Date().toISOString().replace(/[:.]/g, '-')
+    let base = (customName || '')
+      .trim()
+      .replace(/[^a-zA-Z0-9-_\s]/g, ' ')
+      .replace(/\s+/g, '-').slice(0, 60)
+    if (!base) {
+      if (file?.name) {
+        base = file.name.replace(/\.[^.]+$/, '')
+      } else if (message) {
+        base = message.split(/\s+/).slice(0, 5).join('-').replace(/[^a-zA-Z0-9-_]/g, '').slice(0, 60) || 'note'
+      } else {
+        base = 'upload'
+      }
+    }
+    const ext = (textExt || (file?.name && file.name.includes('.') ? file.name.split('.').pop() : '') || 'txt')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 12)
+      .toLowerCase() || 'txt'
+    const finalName = `${nowTs}-${base}.${ext}`
+
+    let contentBase64 = ''
+    if (file instanceof File) {
+      const buf = await file.arrayBuffer()
+      const bytes = new Uint8Array(buf)
+      let binary = ''
+      const chunk = 0x8000
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+      }
+      contentBase64 = btoa(binary)
+    } else if (message) {
+      const text = message.endsWith('\n') ? message : message + '\n'
+      const enc = new TextEncoder().encode(text)
+      let binary = ''
+      for (let b of enc) binary += String.fromCharCode(b)
+      contentBase64 = btoa(binary)
+    } else {
+      throw new Error('沒有上傳內容')
+    }
+
+    const res = await fetch(`${apiBase}/${encodeURIComponent(finalName)}`, {
+      method: 'PUT',
+      headers: { ...stdHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `chore: embedded upload ${finalName}`,
+        content: contentBase64,
+        branch,
+      }),
+    })
+    if (!res.ok) {
+      const t = await res.text()
+      throw new Error('上傳失敗:' + t)
+    }
+    return res.json()
+  }
+
+  async function deleteOne(path) {
+    const meta = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`, { headers: stdHeaders() })
+    if (!meta.ok) throw new Error('取得檔案資訊失敗')
+    const info = await meta.json()
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, {
+      method: 'DELETE',
+      headers: { ...stdHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `chore: delete ${path}`, sha: info.sha, branch }),
+    })
+    if (!res.ok) throw new Error('刪除失敗')
+    return res.json()
+  }
+
+  async function deleteAll() {
+    const files = await list()
+    for (const f of files) {
+      try { await deleteOne(f.path) } catch (e) { /* ignore */ }
+    }
+    return { message: '全部刪除完成', count: files.length }
+  }
+
+  return {
+    id: 'github-embedded',
+    label: 'GitHub Embedded',
+    capabilities: { list: true, upload: true, delete: true, deleteAll: true },
+    list,
+    upload,
+    delete: deleteOne,
+    deleteAll,
+  }
+}
+
 export function listProviders(ctx){
   const providers = []
+  // Embedded provider (若設定 useEmbeddedToken)
+  if (ctx?.useEmbeddedToken){
+    providers.push(createEmbeddedGitHubProvider({
+      owner: ctx.owner || 'changrun1',
+      repo: ctx.repo || 'changrun1.github.io',
+      branch: ctx.branch || 'main'
+    }))
+  }
   // Direct provider 優先（若設定了 tokenParts）
   if (ctx?.directTokenParts && Array.isArray(ctx.directTokenParts) && ctx.directTokenParts.length){
     providers.push(createGitHubDirectProvider({

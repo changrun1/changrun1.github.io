@@ -2,20 +2,13 @@
 import UploadPanel from '../components/UploadPanel.vue'
 import { useSiteContent } from '../composables/useSiteContent.js'
 import { useStorageProvider } from '../composables/useStorageProvider.js'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 const { config, refreshDownloads } = useSiteContent()
-const ghTokenRaw = ref(localStorage.getItem('gh:token') || '')
-const directTokenParts = computed(() => {
-  const t = ghTokenRaw.value.trim()
-  if(!t) return []
-  const parts = []
-  for (let i=0; i<t.length; i+=6){ parts.push(t.slice(i,i+6)) }
-  return parts
-})
 const providerApi = useStorageProvider({
   baseUrl: '',
-  directTokenParts: directTokenParts.value,
+  directTokenParts: [],
+  useEmbeddedToken: true,
   owner: config.value.owner,
   repo: config.value.repo,
   branch: config.value.branch,

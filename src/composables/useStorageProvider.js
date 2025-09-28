@@ -4,7 +4,7 @@ import { listProviders } from '../services/storageProviders.js'
 const selectedId = ref(localStorage.getItem('storage:provider') || 'github-direct')
 const providersRef = ref([])
 
-// options: { baseUrl?, directTokenParts?, owner, repo, branch }
+// options: { baseUrl?, directTokenParts?, owner, repo, branch, useEmbeddedToken? }
 export function useStorageProvider(options){
   const {
     baseUrl = '',
@@ -12,9 +12,10 @@ export function useStorageProvider(options){
     owner = 'changrun1',
     repo = 'changrun1.github.io',
     branch = 'main',
+    useEmbeddedToken = false,
   } = typeof options === 'object' ? options : { baseUrl: options }
 
-  providersRef.value = listProviders({ baseUrl, directTokenParts, owner, repo, branch })
+  providersRef.value = listProviders({ baseUrl, directTokenParts: useEmbeddedToken ? [] : directTokenParts, owner, repo, branch, useEmbeddedToken })
   const provider = computed(() => providersRef.value.find(p => p.id === selectedId.value) || providersRef.value[0])
 
   function setProvider(id){

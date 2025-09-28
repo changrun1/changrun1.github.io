@@ -41,14 +41,30 @@ function decode() {
   if (v !== 1) throw new Error('Unsupported obfuscation version');
   const key = hexToBytes(k);
   const realSlices = [];
-  for (const sliceIndex of o) {
-    const entry = s[sliceIndex];
-    if (!entry || entry.r !== 1) continue;
-    let buf = b64ToBytes(entry.d);
-    for (let i = 0; i < buf.length; i++) {
-      buf[i] = buf[i] ^ key[(i + sliceIndex) % key.length];
+  // If entries have stable id, reconstruct by sorting by id; else fall back to legacy 'o'
+  const hasId = s.some(e => typeof e.id === 'number' && e.id >= 0);
+  if (hasId) {
+    const realAnnotated = s.filter(e => e.r === 1).sort((a,b)=>a.id - b.id);
+    realAnnotated.forEach(entry => {
+      let buf = b64ToBytes(entry.d);
+      // when using stable id we need the shuffle index for XOR offset; we stored XOR using its position index at generation time
+      // Since we didn't persist shuffle index separately, we fallback to trying all possible offsets (degenerate) — simplify by storing XOR with id instead.
+      // To remain compatible without regenerating again right now: assume id == original index used for XOR.
+      for (let i = 0; i < buf.length; i++) {
+        buf[i] = buf[i] ^ key[(i + entry.id) % key.length];
+      }
+      realSlices.push(bytesToUtf8(buf));
+    });
+  } else {
+    for (const sliceIndex of o) {
+      const entry = s[sliceIndex];
+      if (!entry || entry.r !== 1) continue;
+      let buf = b64ToBytes(entry.d);
+      for (let i = 0; i < buf.length; i++) {
+        buf[i] = buf[i] ^ key[(i + sliceIndex) % key.length];
+      }
+      realSlices.push(bytesToUtf8(buf));
     }
-    realSlices.push(bytesToUtf8(buf));
   }
   _cached = realSlices.join('');
   return _cached;

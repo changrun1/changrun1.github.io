@@ -59,51 +59,56 @@ function randomSplit(str, parts) {
 
 let slices = randomSplit(plain, sliceCount);
 
-// 3. Inject decoy slices
+// 3. Inject decoy slices (added AFTER real slices)
 const decoyCount = Math.max(2, Math.floor(sliceCount / 2));
-for (let i=0;i<decoyCount;i++) {
-  const fakeLen = Math.max(3, Math.min(8, Math.floor(Math.random()*8)+3));
-  const fake = crypto.randomBytes(fakeLen).toString('hex').slice(0,fakeLen);
+for (let i = 0; i < decoyCount; i++) {
+  const fakeLen = Math.max(3, Math.min(8, Math.floor(Math.random() * 8) + 3));
+  const fake = crypto.randomBytes(fakeLen).toString('hex').slice(0, fakeLen);
   slices.push(fake);
 }
 
-// 4. Annotate whether real or decoy
-let annotated = slices.map(s => ({v:s, real:true}));
-// Mark decoys (those appended after original sliceCount)
-for (let i=sliceCount;i<annotated.length;i++) annotated[i].real = false;
+// 4. Annotate with stable id for real slices so we can reconstruct original order
+let annotated = slices.map((s, idx) => ({
+  id: idx < sliceCount ? idx : -1, // stable increasing id only for real slices
+  v: s,
+  real: idx < sliceCount
+}));
 
-// 5. Shuffle
-for (let i=annotated.length-1;i>0;i--) {
-  const j = Math.floor(Math.random()*(i+1));
+// 5. Shuffle in-place (Fisher–Yates)
+for (let i = annotated.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
   [annotated[i], annotated[j]] = [annotated[j], annotated[i]];
 }
 
-// 6. XOR encode real slice chars with rotating key offset and per-slice nonce
+// 6. XOR encode real slices with rotating key offset; decoys just base64 original
 annotated = annotated.map((obj, idx) => {
-  const nonce = crypto.randomBytes(2); // small per-slice nonce
+  const nonce = crypto.randomBytes(2);
   if (!obj.real) {
     return {
       d: Buffer.from(obj.v).toString('base64'),
       n: nonce.toString('hex'),
-      r: 0
+      r: 0,
+      id: obj.id
     };
   }
   const buf = Buffer.from(obj.v, 'utf8');
-  for (let i=0;i<buf.length;i++) {
-    buf[i] = buf[i] ^ xorKey[(i+idx) % xorKey.length];
+  for (let i = 0; i < buf.length; i++) {
+    buf[i] = buf[i] ^ xorKey[(i + idx) % xorKey.length];
   }
   return {
-    d: buf.toString('base64'), // encoded slice
+    d: buf.toString('base64'),
     n: nonce.toString('hex'),
-    r: 1
+    r: 1,
+    id: obj.id
   };
 });
 
-// 7. Build index map for the order of real slices (we capture their positions after shuffle)
+// 7. Build index map (positions in shuffled array) sorted by original real-slice id
 const order = annotated
-  .map((o,i)=> ({i, r:o.r}))
-  .filter(o=>o.r===1)
-  .map(o=>o.i);
+  .map((o, i) => ({ i, id: o.id, r: o.r }))
+  .filter(o => o.r === 1)
+  .sort((a, b) => a.id - b.id)
+  .map(o => o.i);
 
 // 8. Final structure
 const payload = {

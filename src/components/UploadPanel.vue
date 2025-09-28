@@ -217,7 +217,11 @@ const handleSubmit = async () => {
   try {
     if (props.uploadProvider && !props.endpoint) {
       // Provider 模式
-      const effectiveExt = form.textExt === 'custom' ? form.customTextExt : form.textExt
+      // 只有文字模式才需要副檔名；檔案模式讓 provider 從原檔名推導
+      let effectiveExt = null
+      if (mode.value === 'text') {
+        effectiveExt = form.textExt === 'custom' ? form.customTextExt : form.textExt
+      }
       // 兼容傳入為 ref / computed 或直接物件
       const prov = (props.uploadProvider && typeof props.uploadProvider === 'object' && 'value' in props.uploadProvider)
         ? props.uploadProvider.value
@@ -225,12 +229,13 @@ const handleSubmit = async () => {
       if (!prov || typeof prov.upload !== 'function') {
         throw new Error('上傳 provider 尚未就緒（缺 upload 方法）')
       }
-      const result = await prov.upload({
+      const payload = {
         file: form.file,
         message: mode.value === 'text' ? form.message : '',
         customName: form.customName,
-        textExt: effectiveExt,
-      })
+      }
+      if (effectiveExt) payload.textExt = effectiveExt
+      const result = await prov.upload(payload)
       feedback.type = 'success'
       feedback.message = (result && result.message) || '上傳完成。'
       resetForm()

@@ -14,9 +14,7 @@ const providerApi = useStorageProvider({
   branch: config.value.branch,
 })
 
-const uploadEndpoint = computed(()=> {
-  return '' // endpoint 不再使用（直接透過 provider）
-})
+const uploadEndpoint = computed(()=> '' ) // 走 provider 模式
 </script>
 
 <template>
@@ -27,7 +25,7 @@ const uploadEndpoint = computed(()=> {
     </header>
 
     <div class="rounded-3xl border border-slate-200/70 bg-white/85 p-6 shadow-sm">
-      <UploadPanel :endpoint="uploadEndpoint" @upload-success="() => refreshDownloads()" />
+      <UploadPanel :endpoint="uploadEndpoint" :upload-provider="providerApi.provider" @upload-success="() => refreshDownloads({ force: true })" />
     </div>
   </section>
 </template>

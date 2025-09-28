@@ -83,6 +83,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  uploadProvider: {
+    type: Object,
+    default: null,
+  },
   maxFileSize: {
     type: Number,
     default: 10 * 1024 * 1024,
@@ -160,7 +164,8 @@ const handleFileChange = (event) => {
 }
 
 const handleSubmit = async () => {
-  if (!props.endpoint) {
+  // 若無 endpoint 則嘗試使用 provider 模式
+  if (!props.endpoint && !props.uploadProvider) {
     feedback.type = 'error'
     feedback.message = '尚未設定上傳端點。'
     return
@@ -210,30 +215,40 @@ const handleSubmit = async () => {
   feedback.message = ''
 
   try {
-    const payload = new FormData()
-    if (form.message) payload.append('message', form.message)
-    if (form.file) payload.append('file', form.file)
-    if (form.customName) payload.append('filename', form.customName)
-    if (form.message && form.textExt) {
-      const ext = form.textExt === 'custom' ? form.customTextExt : form.textExt
-      payload.append('textExt', ext)
+    if (props.uploadProvider && !props.endpoint) {
+      // Provider 模式
+      const effectiveExt = form.textExt === 'custom' ? form.customTextExt : form.textExt
+      const result = await props.uploadProvider.upload({
+        file: form.file,
+        message: mode.value === 'text' ? form.message : '',
+        customName: form.customName,
+        textExt: effectiveExt,
+      })
+      feedback.type = 'success'
+      feedback.message = (result && result.message) || '上傳完成。'
+      resetForm()
+      emit('upload-success')
+    } else {
+      // 舊 endpoint 模式（保留兼容）
+      const payload = new FormData()
+      if (form.message) payload.append('message', form.message)
+      if (form.file) payload.append('file', form.file)
+      if (form.customName) payload.append('filename', form.customName)
+      if (form.message && form.textExt) {
+        const ext = form.textExt === 'custom' ? form.customTextExt : form.textExt
+        payload.append('textExt', ext)
+      }
+      const response = await fetch(props.endpoint, { method: 'POST', body: payload })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ message: '上傳失敗，請稍後再試。' }))
+        throw new Error(data.message || '上傳失敗，請稍後再試。')
+      }
+      const result = await response.json()
+      feedback.type = 'success'
+      feedback.message = result.message || '上傳完成。'
+      resetForm()
+      emit('upload-success')
     }
-
-    const response = await fetch(props.endpoint, {
-      method: 'POST',
-      body: payload,
-    })
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({ message: '上傳失敗，請稍後再試。' }))
-      throw new Error(data.message || '上傳失敗，請稍後再試。')
-    }
-
-    const result = await response.json()
-    feedback.type = 'success'
-    feedback.message = result.message || '上傳完成。'
-    resetForm()
-    emit('upload-success')
   } catch (error) {
     feedback.type = 'error'
     feedback.message = error instanceof Error ? error.message : '上傳失敗，請稍後再試。'

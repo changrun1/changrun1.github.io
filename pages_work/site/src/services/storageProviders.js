@@ -2,9 +2,7 @@
 // 方法：list(), upload(formDataParts), delete(path), deleteAll()
 // 回傳格式對齊現有 downloads 陣列元素格式。
 
-function buildTimestamp(){
-  return new Date().toISOString().replace(/[:.]/g,'-')
-}
+// （保留空間：未來若需要時間戳命名再加入）
 
 // Helper：將文字與檔案欄位轉為 FormData（共用）
 function buildFormData(parts){
@@ -50,32 +48,9 @@ export function createGitHubWorkerProvider({ baseUrl }){
   return { id:'github-worker', label:'GitHub Worker', capabilities:{ list:true, upload:true, delete:true, deleteAll:true }, list, upload, delete: remove, deleteAll: removeAll }
 }
 
-// 預留：R2 Provider（目前為佔位，待後端改造）
-export function createR2Provider({ baseUrl }){
-  const base = (baseUrl||'').replace(/\/$/,'')
-  async function list(){
-    // 預期未來 Worker 會提供 /r2/uploads
-    const res = await fetch(`${base}/r2/uploads`).catch(()=>null)
-    if(!res || !res.ok) return []
-    const data = await res.json().catch(()=>({downloads:[]}))
-    return Array.isArray(data.downloads)? data.downloads : []
-  }
-  async function upload(){
-    throw new Error('R2 尚未啟用 (後端未完成)')
-  }
-  async function remove(){
-    throw new Error('R2 尚未啟用')
-  }
-  async function removeAll(){
-    throw new Error('R2 尚未啟用')
-  }
-  return { id:'r2', label:'R2 (即將支援)', capabilities:{ list:true, upload:false, delete:false, deleteAll:false }, list, upload, delete: remove, deleteAll: removeAll }
-}
-
 export function listProviders(ctx){
   const baseUrl = ctx?.baseUrl
   return [
     createGitHubWorkerProvider({ baseUrl }),
-    createR2Provider({ baseUrl }),
   ]
 }

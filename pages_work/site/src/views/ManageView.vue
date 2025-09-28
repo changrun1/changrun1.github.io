@@ -189,7 +189,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1">
+          <div v-if="storage.providers.value.length > 1" class="flex items-center gap-1">
             <label class="text-[10px] text-slate-500">儲存後端</label>
             <select v-model="storage.selectedId.value" class="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs">
               <option v-for="p in storage.providers.value" :key="p.id" :value="p.id">{{ p.label }}</option>

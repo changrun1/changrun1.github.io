@@ -19,6 +19,7 @@
 * 自訂檔名；同名檔衝突時回傳 409。
 * 批次刪除 / 單檔刪除。
 * 無使用者資料蒐集；僅檔案層級。
+* 可插拔儲存層架構（目前僅啟用 GitHub，未來可擴充 R2 / S3）
 
 ---
 
@@ -164,6 +165,23 @@ const config = ref({
 * 內容全文搜尋（前端索引 / Worker 提供）
 * Metadata（標籤 / 備註）側欄
 * 上傳佇列 / 進度列 / 拖放
+
+---
+
+## 🧱 可插拔儲存層（Storage Provider）
+前端已內建 provider 抽象（strategy pattern）。目前僅啟用 `GitHub (Worker)`，當只有一個 provider 時 UI 會隱藏選擇器。
+
+擴充步驟（例如新增 R2 / S3）：
+1. 新增 provider：`src/services/storageProviders.js` 中加入新的工廠函式
+2. 實作方法：`list`（列出檔案）、`deleteOne`、`deleteMany` / `deleteAll`、必要時 `upload`
+3. 將 provider 加入 `listProviders()` 回傳陣列
+4. Worker 端新增對應路由（或重用 `/upload` + 參數區分）
+5. 多於一個 provider 後前端自動顯示下拉選擇
+
+R2 典型實作方式：
+* Worker 直接使用 R2 binding (`env.MY_BUCKET.put/get/list`)，回傳精簡 JSON。
+* 前端 provider 呼叫 Worker `/r2/uploads`/`/r2/upload` 之類端點。
+* 需考量：檔名衝突、MIME、權限（私有時可加一次性簽名 URL）。
 
 ---
 

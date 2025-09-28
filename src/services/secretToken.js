@@ -3,7 +3,7 @@
 // Then copy the JSON object content and replace OBF_DATA below.
 // WARNING: Obfuscation != Security. The token can be recovered by anyone with bundle access.
 
-const OBF_DATA = {"v":1,"k":"ad07f7b41cf4555417d0e68d5fb09f08624596c1445df6802f43bc5c727613a5","s":[{"d":"xXKV6w==","n":"751c","r":1},{"d":"SK6FeJcnIkKxtO9s4fJLESjTlH0cwuVfDQ==","n":"a5e1","r":1},{"d":"h9Voq2RlVuax","n":"abd5","r":1},{"d":"MzU0ZTAzZmY=","n":"edc6","r":0},{"d":"ZjQwOA==","n":"a55f","r":0},{"d":"oxJmXg==","n":"122f","r":1},{"d":"ODBlMzkzMg==","n":"f099","r":0},{"d":"MDVlOWQ1Mw==","n":"2b74","r":0},{"d":"ULiO3yvg7z8Y","n":"e67d","r":1},{"d":"nrzYF/OqUChy+ZMiZJ7oaQY=","n":"87de","r":1},{"d":"hM45","n":"b98b","r":1},{"d":"6jbE","n":"7f77","r":1},{"d":"b9nVZgBz2awjZLHZZBzIBTARUQ==","n":"1916","r":1}],"o":[0,1,2,5,8,9,10,11,12],"m":"This is obfuscated; NOT secure."}; // embedded obfuscated token
+const OBF_DATA = {"v":1,"k":"c1b918e4bb222c1e60c2cf96f6c77f67516c062325d8598e0dfe10affdeb79be","s":[{"d":"mPJHkOJgS1wv","n":"2e60","r":1,"id":1},{"d":"yVaj00p+ajCy+OyU","n":"26d4","r":1,"id":5},{"d":"QrHzYRlGKvWgxJD+Fw8=","n":"a327","r":1,"id":7},{"d":"NzhmMg==","n":"e117","r":0,"id":-1},{"d":"4hNIfRI=","n":"55b9","r":1,"id":2},{"d":"YUpQ","n":"a09e","r":1,"id":6},{"d":"MWJhNzE=","n":"0bde","r":0,"id":-1},{"d":"bQ2Hmq+38xo=","n":"ece5","r":1,"id":4},{"d":"MjQ3","n":"7210","r":0,"id":-1},{"d":"pabinrIdOCENcnwU6Ri4WqlXnbTbEPSv2y6r1kUVWQ==","n":"6e27","r":1,"id":0},{"d":"idM=","n":"3509","r":1,"id":8},{"d":"4KOmLQViPWtg","n":"c8df","r":1,"id":3},{"d":"ZTI5MjFkZWE=","n":"65fa","r":0,"id":-1}],"o":[9,0,4,11,7,1,5,2,10],"m":"This is obfuscated; NOT secure."}; // embedded obfuscated token
 
 let _cached;
 

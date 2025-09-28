@@ -2,25 +2,27 @@
 import UploadPanel from '../components/UploadPanel.vue'
 import { useSiteContent } from '../composables/useSiteContent.js'
 import { useStorageProvider } from '../composables/useStorageProvider.js'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const { config, refreshDownloads } = useSiteContent()
-const directTokenParts = [ 'ghp_', 'REPLACE', 'ME', '_TOKEN' ]
+const ghTokenRaw = ref(localStorage.getItem('gh:token') || '')
+const directTokenParts = computed(() => {
+  const t = ghTokenRaw.value.trim()
+  if(!t) return []
+  const parts = []
+  for (let i=0; i<t.length; i+=6){ parts.push(t.slice(i,i+6)) }
+  return parts
+})
 const providerApi = useStorageProvider({
   baseUrl: '',
-  directTokenParts,
+  directTokenParts: directTokenParts.value,
   owner: config.value.owner,
   repo: config.value.repo,
   branch: config.value.branch,
 })
 
 const uploadEndpoint = computed(()=> {
-  // 仍沿用舊 UploadPanel 需要的 endpoint（GitHub Worker）
-  const base = config.value.workerBase || ''
-  if(providerApi.provider.value.id !== 'github-worker'){
-    return '' // 禁用按鈕，改成 provider layer 直接呼叫（下個版本可重構 UploadPanel）
-  }
-  return base ? base.replace(/\/$/,'') + '/upload' : ''
+  return '' // endpoint 不再使用（直接透過 provider）
 })
 </script>
 

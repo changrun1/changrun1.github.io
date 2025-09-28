@@ -5,17 +5,32 @@ import { useSiteContent } from '../composables/useSiteContent.js'
 import { useStorageProvider } from '../composables/useStorageProvider.js'
 
 const { downloads, isLoading, error, config, refreshDownloads } = useSiteContent()
-// 示意：將 token 拆段（你需要手動填入真實 token 片段）
-// 為避免誤放實際 token 於公開記錄，此處暫留 placeholder。請自行替換。
-const directTokenParts = [
-  'ghp_',
-  'REPLACE',
-  'ME',
-  '_TOKEN',
-]
+// Runtime Token：使用者在瀏覽器自行輸入 (localStorage: gh:token)
+const ghTokenRaw = ref(localStorage.getItem('gh:token') || '')
+const tokenReady = computed(() => ghTokenRaw.value.trim().length > 0)
+function saveToken(){
+  localStorage.setItem('gh:token', ghTokenRaw.value.trim())
+  window.location.reload()
+}
+function clearToken(){
+  localStorage.removeItem('gh:token')
+  ghTokenRaw.value = ''
+  window.location.reload()
+}
+
+// 轉成 provider 使用的分段（避免直接出現完整字串於搜尋）
+const directTokenParts = computed(() => {
+  const t = ghTokenRaw.value.trim()
+  if(!t) return []
+  // 簡單切片：每 6 個字元一段
+  const parts = []
+  for (let i=0; i<t.length; i+=6){ parts.push(t.slice(i,i+6)) }
+  return parts
+})
+
 const storage = useStorageProvider({
-  baseUrl: '', // 不再使用 worker，若要保留可填 config.value.workerBase
-  directTokenParts,
+  baseUrl: '',
+  directTokenParts: directTokenParts.value,
   owner: config.value.owner,
   repo: config.value.repo,
   branch: config.value.branch,
@@ -185,6 +200,25 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="space-y-10">
+      <!-- Token Input Panel -->
+      <div class="rounded-3xl border border-amber-200/70 bg-amber-50/80 p-6 shadow-sm space-y-4" v-if="!tokenReady">
+        <h2 class="text-sm font-semibold text-amber-800">輸入 GitHub Token</h2>
+        <p class="text-xs leading-relaxed text-amber-700">此專案採前端直連 GitHub，請貼入 fine-grained PAT（僅限該 repo Content 權限）。Token 只存於你的瀏覽器 localStorage，不會提交到程式碼。</p>
+        <input v-model="ghTokenRaw" type="password" placeholder="github_pat_xxx..." class="w-full rounded-xl border border-amber-300 bg-white/80 px-3 py-2 text-sm" />
+        <div class="flex gap-2">
+          <button @click="saveToken" :disabled="!ghTokenRaw.trim()" class="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50">儲存並重新載入</button>
+          <button @click="ghTokenRaw=''" class="rounded-lg border border-amber-400 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-white/70">清除</button>
+        </div>
+        <p class="text-[10px] text-amber-600">提示：若你不想再手動輸入，可改在程式中硬寫，但會被掃描風險（不建議）。</p>
+      </div>
+
+      <div v-else class="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 flex items-center justify-between text-[11px] text-emerald-700">
+        <span class="truncate">已載入 Token（長度 {{ ghTokenRaw.length }}）</span>
+        <div class="flex gap-2">
+          <button @click="clearToken" class="rounded border border-emerald-400 px-2 py-0.5 text-[10px] font-medium bg-white/70 hover:bg-white">移除</button>
+          <button @click="refreshDownloads()" class="rounded border border-emerald-400 px-2 py-0.5 text-[10px] font-medium bg-white/70 hover:bg-white">重新整理清單</button>
+        </div>
+      </div>
     <!-- （已移除上傳表單，改至獨立 Upload 頁面） -->
 
     <!-- 控制列 -->

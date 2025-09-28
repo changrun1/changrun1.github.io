@@ -1,8 +1,8 @@
-﻿# File Share (Direct GitHub Version)
+﻿# File Share (Direct GitHub Runtime Token)
 
-此分支/版本已移除 Cloudflare Worker，改為「前端直接呼叫 GitHub Contents API」上傳 / 列出 / 刪除檔案。純個人自用，不考慮多人 / 公開安全情境。
+此版本移除 Cloudflare Worker，改為「前端直接呼叫 GitHub Contents API」。Token 不再硬寫在程式碼，而是啟動後由瀏覽器使用者輸入並存在 localStorage（key: `gh:token`）。
 
-> 備份：原 Worker 版已建立分支 `worker-version-backup`，需要可切換回去。
+> 備份：原 Worker 版在分支 `worker-version-backup`。
 
 ## 目前行為
 * 上傳：直接以 GitHub API `PUT /repos/:owner/:repo/contents/site/uploads/<檔名>` 寫入。
@@ -10,29 +10,23 @@
 * 列出：`GET /contents/site/uploads` 讀取檔案列表。
 * 檔名：`<ISO 時間戳>-<簡化名稱>.<副檔>`，避免覆蓋。
 
-## Token 使用與「混淆」
-程式碼內保留一個 `directTokenParts` 陣列，將 GitHub Fine-grained PAT 拆成多段再 `join`。這只是在阻擋最粗糙的全文檢索，並不是真正安全：
+## Token 使用流程 (runtime)
+1. 到 GitHub Developer settings 產生 fine‑grained PAT（僅此 repo，Content: Read/Write）。
+2. 首次開啟「管理」頁時，輸入 Token 並儲存；頁面會重新載入。
+3. Token 會被切片後組合送出 API，僅存於瀏覽器 localStorage，不進入程式碼版本控制。
+4. 要移除：管理頁點「移除」按鈕或手動清除 localStorage。
 
-```js
-const directTokenParts = [ 'ghp_', 'REPLACE', 'ME', '_TOKEN' ]
-// 實際使用時自行改成真實 token 片段，例如：
-// ['ghp_xxxxx', 'yyyyy', 'zzzzz']
-```
-
-任何人只要能載入此瀏覽器程式，就能在 Sources / Network 查看完整 Token。
-
-### 如果真的要稍微降低風險：
-1. 使用 fine-grained PAT，僅允許本 repo Content read/write。
-2. 定期 rotate。
-3. 不要公開此部署網址。
-4. 若未來要分享給他人，用 Worker / Proxy 再包一層。
+### 風險與提醒
+* 前端環境無法真正保護 Token（DevTools 可查看）。
+* 避免公開部署網址；若外流立即 Revoke & 重發。
+* 不適合多人共用或大量流量情境。
 
 ## 主要檔案調整
 * `src/services/storageProviders.js` 新增 `github-direct` provider。
 * `src/composables/useStorageProvider.js` 支援 `directTokenParts`。
-* `src/views/ManageView.vue`、`UploadView.vue` 改用 direct provider。
+* `src/views/ManageView.vue`、`UploadView.vue` 改用 runtime token direct provider。
 * `src/composables/useSiteContent.js` 取消 worker fallback。
-* `cloudflare/worker/` 仍暫留（備份，之後可刪）。
+* 已移除 `cloudflare/worker/` 目錄（見備份分支）。
 
 ## 回到舊版（含 Worker）
 ```bash
@@ -45,7 +39,10 @@ git checkout worker-version-backup
 * 匿名多人上傳
 * 想避免 token 洩漏
 
-用途僅限作者本機 / 私人使用測試。
+用途僅限作者本機 / 私人使用測試。若 token 遭濫用：
+1. Revoke PAT。
+2. 產生新 PAT 並重新輸入。
+3. 檢查最近 commit 是否被竄改並 revert。
 
 ## 授權
 MIT

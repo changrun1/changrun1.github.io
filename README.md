@@ -13,7 +13,7 @@
 前端 -> 呼叫 Cloudflare Worker -> Worker 以 GitHub API 寫入/讀取 repo 內容。
 
 ## 自行部署請前往
-➡️ 模板倉庫（完整教學、指令、範例程式）: https://github.com/your-org/paste-hub-starter *(placeholder，建立後請替換)*
+➡️ 模板倉庫（完整教學、指令、範例程式）: https://github.com/changrun1/file-share
 
 該模板會包含：
 1. 最小前端 + API 呼叫封裝
@@ -22,17 +22,14 @@
 4. 常見錯誤排查與 Checklist
 
 ## 線上示例
-Demo（若已開放）: https://example.com *(可選，未設可刪)*
+Demo（若已開放）: https://changrun1.github.io/
 
 ## 為什麼不直接 Fork 這裡？
 此倉庫包含個人調整與可能的過時片段；集中維護於新模板能避免他人被歷史雜訊干擾。
 
 ## 授權
-MIT（若模板不同，可於模板內再調整）。
+MIT
 
 ---
 有需求 / 問題：請到模板倉庫開 issue（這裡不受理自架支援）。
-2. 建立 Fine-grained 或 classic（最小：repo content write）
-
-3. 複製一次性 Token（後面放 Worker Secret）
 

@@ -2,8 +2,10 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import UploadPanel from '../components/UploadPanel.vue'
 import { useSiteContent } from '../composables/useSiteContent.js'
+import { useStorageProvider } from '../composables/useStorageProvider.js'
 
 const { downloads, isLoading, error, config, refreshDownloads } = useSiteContent()
+const storage = useStorageProvider(computed(()=> config.value.workerBase).value)
 
 const searchTerm = ref('')
 const selectedPath = ref('')
@@ -15,7 +17,7 @@ const normalizedWorkerBase = computed(() => {
   return base ? base.replace(/\/$/, '') : ''
 })
 
-const uploadEndpoint = computed(() => (normalizedWorkerBase.value ? `${normalizedWorkerBase.value}/upload` : '')) // reserved if needed elsewhere
+const uploadEndpoint = computed(() => (normalizedWorkerBase.value ? `${normalizedWorkerBase.value}/upload` : ''))
 const deleteEndpoint = computed(() => (normalizedWorkerBase.value ? `${normalizedWorkerBase.value}/uploads` : ''))
 
 const sortKey = ref('time') // time | name | size
@@ -104,35 +106,26 @@ async function copyPreview(){
 }
 
 async function deleteFile(file){
-  const base = deleteEndpoint.value
-  if(!base) return
   const ok = window.confirm(`確定刪除 ${file.name} ?`)
   if(!ok) return
   try {
-    const res = await fetch(base, { method:'DELETE', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ path: file.path }) })
-    if(!res.ok) throw new Error('刪除失敗')
+    await storage.remove(file.path)
     await refreshDownloads({ full:true })
     setMessage('刪除完成。')
   } catch(e){
-    setMessage('刪除失敗。')
+    setMessage(e instanceof Error ? e.message : '刪除失敗。')
   }
 }
 const bulkDelete = async () => {
-  const base = config.value.workerBase?.replace(/\/$/,'')
-  if (!base) {
-    setMessage('尚未設定端點。')
-    return
-  }
   const ok = window.confirm('確定刪除全部上傳檔案？此動作不可復原。')
   if (!ok) return
   deleteState.pending = true
   try {
-    const res = await fetch(`${base}/uploads/all`, { method: 'DELETE' })
-    if (!res.ok) throw new Error('刪除失敗')
+    await storage.removeAll()
     await refreshDownloads({ full: true })
     setMessage('全部刪除完成。')
   } catch(e){
-    setMessage('全部刪除失敗。')
+    setMessage(e instanceof Error ? e.message : '全部刪除失敗。')
   } finally {
     deleteState.pending = false
   }
@@ -196,6 +189,12 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1">
+            <label class="text-[10px] text-slate-500">儲存後端</label>
+            <select v-model="storage.selectedId.value" class="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs">
+              <option v-for="p in storage.providers.value" :key="p.id" :value="p.id">{{ p.label }}</option>
+            </select>
+          </div>
           <select v-model="sortKey" class="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs">
             <option value="time">時間</option>
             <option value="name">名稱</option>

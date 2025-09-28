@@ -1,13 +1,19 @@
 <script setup>
 import UploadPanel from '../components/UploadPanel.vue'
 import { useSiteContent } from '../composables/useSiteContent.js'
+import { useStorageProvider } from '../composables/useStorageProvider.js'
 import { computed } from 'vue'
 
-// 取得 worker base 以便傳入 endpoint（與 ManageView 做法一致但精簡）
 const { config, refreshDownloads } = useSiteContent()
-const uploadEndpoint = computed(() => {
+const providerApi = useStorageProvider(computed(()=> config.value.workerBase).value)
+
+const uploadEndpoint = computed(()=> {
+  // 仍沿用舊 UploadPanel 需要的 endpoint（GitHub Worker）
   const base = config.value.workerBase || ''
-  return base ? base.replace(/\/$/, '') + '/upload' : ''
+  if(providerApi.provider.value.id !== 'github-worker'){
+    return '' // 禁用按鈕，改成 provider layer 直接呼叫（下個版本可重構 UploadPanel）
+  }
+  return base ? base.replace(/\/$/,'') + '/upload' : ''
 })
 </script>
 

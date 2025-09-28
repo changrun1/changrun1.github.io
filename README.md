@@ -13,153 +13,149 @@
 ## ???詨??寡
 * ?∟??澈嚗?獢????單?獢??湔 commit ?脫?摰?GitHub Repo??* ?垢?單?憿舐內嚗?摮??批捆?券???嚗票銝??喳銴ˊ??* 隤?擃漁 + 銵?嚗?游虜閬?撘Ⅳ嚗s/ts/css/html/json/py 蝑???* ???舫?閬踝??嗡?瑼??湔銝???* ?芾?蝝?摮瑼?嚗xt / md / ?芾??望 1??2嚗?* ?芾?瑼?嚗???銵?????409??* ?寞活?芷 / ?格??芷??* ?∩蝙?刻???????獢惜蝝?* ?舀??摮惜?嗆?嚗??? GitHub嚗靘?游? R2 / S3嚗?
 ---
+<div align="center">
 
-## ?妤 ?銵瑽?| 撅?| ?銵?| 雿蔭 | 隤芣? |
+# 檔案分享 / 文字貼系統 (Vue + Cloudflare Worker + GitHub)
+
+一個「免資料庫、前後端分離」的檔案與純文字分享平台。前端為單頁 SPA，後端以 Cloudflare Worker 直接寫入 GitHub Repository，實作：上傳 / 列表 / 預覽 / 下載 / 刪除 全流程。適合個人或小組臨時交換內容、貼程式片段、傳遞附件。
+
+<sub>Chinese primary documentation. English summary below.</sub>
+
+</div>
+
+---
+
+## ✨ 功能特色
+* 無資料庫：檔案與文字即檔案 (commit 進 GitHub Repo)
+* 文字類貼上即顯示：小型文字內容預抓快取
+* 語法高亮 + 行號（精選語言：js / ts / css / html / json / py ...）
+* 圖片預覽 / 其他格式直接下載
+* 自訂純文字副檔名（txt / md / 自訂英數 1–12）
+* 自訂檔名；同名檔衝突回傳 409
+* 批次刪除 / 單檔刪除 / 全清空
+* 不蒐集使用者資料（僅檔案層級）
+* 可插拔儲存層架構（目前僅 GitHub，未來可擴充 R2 / S3）
+
+---
+
+## 🧱 技術架構
+| 層 | 技術 | 路徑 | 說明 |
 |----|------|------|------|
-| ?垢 SPA | Vue 3 + Vite + Tailwind | `site/src` | UI / 銝 / ?汗 / 蝞∠? |
-| 敺垢 | Cloudflare Worker (TypeScript) | `site/cloudflare/worker` | ?嗡??喋神 GitHub???箝??|
-| ?脣? | GitHub Repository | `site/uploads` | 瑼??唾???銝? DB |
-| 隤?銝 | highlight.js (??頛) | ?垢 | Downloads / Preview 擃漁 |
+| 前端 SPA | Vue 3 + Vite + Tailwind | `src/` | UI / 上傳 / 管理 / 預覽 |
+| 後端 | Cloudflare Worker (TypeScript) | `cloudflare/worker/` | 接收上傳、呼叫 GitHub API、列出與刪除 |
+| 儲存 | GitHub Repository | `uploads/` (動態產生) | 檔案即資料，不需 DB |
+| 語法上色 | highlight.js (on-demand) | 前端 | Downloads / Preview 高亮 |
 
-### ?桅?璁汗
+### 目錄概覽
 ```
-site/
-	src/
-		views/ (Downloads / Manage / Preview / Upload)
-		components/UploadPanel.vue
-		composables/useSiteContent.js   # ?垢閮剖?????皞?		services/ (GitHub / Worker API ?澆)
-	cloudflare/worker/src/index.ts   # Worker ?亙
-	uploads/                         # 銝敺???瑼?嚗蝵脣?銝???蝺刻摩嚗?```
+src/
+	views/               # Downloads / Manage / Preview / Upload
+	components/          # UI 元件（含 UploadPanel）
+	composables/         # 狀態與資料取得 (useSiteContent, useStorageProvider)
+	services/            # GitHub / Worker API 呼叫封裝
+cloudflare/worker/     # Worker 入口與邏輯
+public/                # 靜態資源
+uploads/               # 上傳後（部署執行時）生成的檔案（git 忽略）
+```
 
 ---
 
-## ? ??瘚?
-1. ?垢銝嚗?摮?瑼?嚗? ?澆 Worker `/upload`??2. Worker 撽???瑼?嚗?? + ?詨‵?芾???嚗ase64 commit ??GitHub??3. ?垢?? `/uploads`嚗orker ???GitHub API Fallback嚗?4. ??憿??亙之撠?曉澆 Worker ?? `textContent` ???垢敹怠?憿舐內??5. 銝?嚗撥?嗡誑 Blob 閫貊?汗?其?頛?銝?仿???6. ?芷嚗orker 靘?獢?path ?芷 GitHub 撠????
+## 🚦 運作流程
+1. 前端上傳（文字或檔案）→ 呼叫 Worker `/upload`
+2. Worker 驗證後組檔名（時間戳 + 可選自訂）→ Base64 commit 至 GitHub
+3. 前端呼叫 `/uploads` 取得列表（Worker / GitHub API fallback）
+4. 純文字小檔案 Worker 直接附帶 `textContent` 供即時顯示
+5. 下載：透過 Blob 觸發瀏覽器下載，不直接打開原始檔路徑
+6. 刪除：Worker 依路徑刪除 GitHub 版本；支援批次與全刪
+
 ---
 
-## ?? ?垢?
-```bash
-cd site
+## 📤 上傳規則
+| 類型 | 檔名模式 | 備註 |
+|------|----------|------|
+| 文字貼 | `timestamp-base.txt|md|<custom>` | timestamp ISO（去冒號/點） + 選填名 |
+| 檔案 | `timestamp-base.ext` / `base.ext` | 自訂名衝突 → 409 |
+| 自訂副檔名 | 英數 1–12，不含 `.` | 自動轉小寫 |
+
+純文字（含程式碼）在大小閾值內會攜帶 `textContent`，減少後續再抓取。
+
+---
+
+## 🔐 安全與強化建議
+| 面向 | 現況 | 可加強 |
+|------|------|--------|
+| 認證 | 無 | Worker Token / Basic Auth / Header Key |
+| 濫用防護 | 無頻率限制 | Cloudflare Turnstile / KV 計數 / IP 限制 |
+| 檔案型別 | 前端副檔名限制 | Worker MIME 白名單 + 大檔拒絕 |
+| 儲存成本 | 全部進 Git | 大檔轉 R2 / S3，僅留 Metadata 指標 |
+| 秘密管理 | PAT 設於 Worker | 可改 GitHub App 安全性更佳 |
+
+---
+
+## 🧩 可插拔儲存層 (Storage Provider)
+目前僅啟用 `GitHub (Worker)`。架構已抽象：
+1. 新增 provider：`src/services/storageProviders.js`
+2. 實作 `list / deleteOne / deleteMany / (upload)`
+3. 加入 `listProviders()` 回傳陣列
+4. Worker 視需要新增後端路由（或共用 `/upload`）
+5. 多 provider 後 UI 自動顯示下拉選擇
+
+---
+
+## 🛠 本地開發
+```
 npm install
 npm run dev
 ```
-撱箇蔭??閬踝?
-```bash
+建置預覽：
+```
 npm run build
 npm run preview
 ```
 
----
-
-## ?? Cloudflare Worker ?函蔡
-```bash
-cd site/cloudflare/worker
+Cloudflare Worker：
+```
+cd cloudflare/worker
 npm install
 wrangler deploy
 ```
-閮剖? Secrets / Variables嚗ashboard ??CLI嚗?
-| ?迂 | 隤芣? | 敹‵ |
+
+必要環境變數：`GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, （可選）`GITHUB_BRANCH`, `MAX_FILE_SIZE`, `ALLOWED_EXTENSIONS`
+
+---
+
+## 🧪 基本測試清單
+| 項目 | 步驟 | 預期 |
 |------|------|------|
-| GITHUB_TOKEN | PAT嚗? repo content 甈? | ??|
-| GITHUB_OWNER | GitHub 雿輻?? Org | ??|
-| GITHUB_REPO  | ?格? Repo ?迂 | ??|
-| GITHUB_BRANCH | ?嚗?閮?main | ???舐???|
-| MAX_FILE_SIZE | 銝憭批?嚗ytes嚗??身 10MB | ?舫 |
-| ALLOWED_EXTENSIONS | ?迂?舀??? | ?舫 |
-
-?函蔡??敺?敺?Worker URL嚗?憒?`https://xxx.workers.dev`??
----
-
-## ?? ?垢???閮剖?
-蝺刻摩 `src/composables/useSiteContent.js`嚗?```js
-const config = ref({
-  owner: 'your-github',
-  repo: 'your-repo',
-  branch: 'main',
-  workerBase: 'https://your-worker.workers.dev',
-  uploadsDir: 'site/uploads',
-})
-```
-?撱箇蔭??仿??唳?????
----
-
-## ? 銝閬?
-| 憿? | 瑼?璅∪? | ?酉 |
-|------|----------|------|
-| ??鞎?| `timestamp-base.txt|md|<custom>` | timestamp ISO ?餃???暺?|
-| 瑼? | `timestamp-base.ext` / `base.ext` | ?芾???蝒???409 |
-| ?芾??舀???| ???1??2嚗???`.` | ???撠神 |
-
-蝝?摮??怎?撘Ⅳ嚗?舫?閬賢之撠??撣?`textContent`??
----
-
-## ?? 摰撱箄降
-| 銝駁? | ?暹? | ?臬?撘?|
-|------|------|--------|
-| 隤? | ??| Worker 撽? Header / Token |
-| 瞈怎?脰風 | ?⊿????| Cloudflare Turnstile / IP ? |
-| 瑼??? | ??| ?亙?脫? / ??賢???|
-| 憭扳?蝑 | Git ?湔摮?| 憭扳?頧?R2 / S3嚗? meta ?? |
+| 上傳 txt | 貼文字 → 上傳 | 立即顯示（不含 .txt 尾綴） |
+| 上傳程式碼 | 貼 JS | 高亮 + 行號 |
+| 上傳圖片 | 選 png | 圖片預覽 |
+| 自訂副檔名 | 選 custom→`note1` | 以 .note1 儲存可下載 |
+| 同名衝突 | 重覆同自訂檔名 | 第二次 409 |
+| 批次刪除 | 勾選多筆刪除 | 列表同步更新 |
+| 全部清空 | 一鍵清空 | uploads 清空 |
 
 ---
 
-## ?妒 ??皜祈岫皜
-| ? | 甇仿? | ?? |
-|------|------|------|
-| 銝 txt | 頛詨??? | Downloads 蝡憿舐內嚗?????.txt嚗?銴ˊ? |
-| 銝 md | ??md ?舀???| ?臭?頛?+ ?汗?批捆 |
-| 銝蝔?蝣?js | 鞎潛?撘Ⅳ | 擃漁 + 銵? + 銝? + ?汗 |
-| 銝?? | ??png | ??閬?+ 銝? |
-| ?芾??舀???note1 | ??custom?ote1 | 瑼?隞?.note1 ?脣?嚗銝? |
-| ??銵? | ???芾??詨?瑼? | 蝚砌?甈∪???409 |
-| ?芷?格? | Manage ?芷 | 皜?湔瘨仃 |
-| ?典 | Manage ?券?芷 | uploads 皜征 |
+## ❓ FAQ（節錄）
+**為什麼沒有 .env？** 前端不需要敏感值；秘密放 Worker。
+**可以換 R2 / S3 嗎？** 可以，實作新 provider + Worker 路由即可。
+**可加登入？** Worker 加驗證 Header 或 JWT。
+**語言高亮擴充？** 引入對應 highlight.js 語言模組。
 
 ---
 
-## ??FAQ
-**?箔?瘝? `.env`?** ?垢銝?閬????????澆 Worker ?啣?霈?? 
-**?箔?頛??撱園?** 蝑? GitHub API commit 摰?嚗?摮惜??Queue?? 
-**?舀?典隞摮?** ?荔?Worker ?孵神??R2/S3 Put + ?Ｙ?皜 JSON?? 
-**?臬??餃?** ?航銵 Worker ??Header ?嚗?撌脩宏??OAuth/CMS?? 
-**?舀?湔憭?閮擃漁?** 撘撠? highlight.js 隤?璅∠?銝西酉??
----
-
-## ?? 餈?霈??嚗陛??
-| ? | 隤芣? |
-|------|------|
-| 隤?銝 | Downloads / Preview 擃漁 + 銵? |
-| ?芾??舀???| ?垢??銝?舀 custom ?舀???|
-| ?寞活?芷 | Manage ?舀?典 |
-| ?梯? .txt | Downloads 憿舐內蝘駁 .txt 撠曄韌 |
-| ???汗 | ??憿舐內蝮格?拇?獢?|
+## 🪪 授權
+MIT
 
 ---
 
-## ?妝 ?游?撱箄降
-* 銵??? / 銝駁??? (light/dark)
-* WebSocket / SSE ?單??湔皜
-* ?批捆?冽???嚗?蝡舐揣撘?/ Worker ??嚗?* Metadata嚗?蝐?/ ?酉嚗甈?* 銝雿? / ?脣漲??/ ?
+### English Summary
+This is a database-less file & text paste platform: Vue 3 SPA + Cloudflare Worker committing directly to a GitHub repository. Features include code highlighting with line numbers, custom text extensions, image preview, bulk deletion, and a pluggable storage provider layer (currently GitHub only). Future storage backends (R2 / S3) can be added by implementing a new provider module and optional Worker routes. Security hardening (auth / rate limiting / file scanning) is intentionally minimal and can be layered later.
 
 ---
 
-## ?妤 ?舀??摮惜嚗torage Provider嚗??垢撌脣撱?provider ?質情嚗trategy pattern嚗??? `GitHub (Worker)`嚗?芣?銝??provider ??UI ?????
-?游?甇仿?嚗?憒憓?R2 / S3嚗?
-1. ?啣? provider嚗src/services/storageProviders.js` 銝剖??交?極撱撘?2. 撖虫??寞?嚗list`嚗??箸?獢??deleteOne`?deleteMany` / `deleteAll`??閬? `upload`
-3. 撠?provider ? `listProviders()` ????
-4. Worker 蝡舀憓??楝?梧?????`/upload` + ????
-5. 憭銝??provider 敺?蝡航?＊蝷箔????
-R2 ?詨?撖虫??孵?嚗?* Worker ?湔雿輻 R2 binding (`env.MY_BUCKET.put/get/list`)嚗??喟移蝪?JSON??* ?垢 provider ?澆 Worker `/r2/uploads`/`/r2/upload` 銋?蝡舫???* ???嚗???蝒IME????蝘????甈⊥抒偷??URL嚗?
----
-
-## ?牧 ??
-MIT嚗靘?瘙?梯矽?湛??⊿?撣嗆?靽???
----
-
+若需要添加更多章節（架構圖 / 截圖 / Roadmap），請提出即可補上。
 ### English Summary (Brief)
+
 This project is a database?ess file & text sharing platform: Vue 3 SPA frontend + Cloudflare Worker backend committing directly to a GitHub repository. Features include code highlighting with line numbers, custom text extensions, image preview, direct download forcing, and bulk deletion. Deploy by: (1) setting Worker with GitHub token, (2) pointing frontend config to Worker base, (3) building static assets for any static host. Security hardening (auth / rate limit / storage offloading) is intentionally minimal and can be layered on easily.
-
----
-
-?仿??望?摰??憿??芸???穿??臬???瘙?
-

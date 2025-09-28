@@ -1,4 +1,5 @@
 import YAML from 'yaml'
+import { getEmbeddedToken } from './secretToken.js'
 
 const API_BASE = 'https://api.github.com'
 const RAW_BASE = 'https://raw.githubusercontent.com'
@@ -42,10 +43,17 @@ const TEXT_EXTENSIONS = new Set([
   'env',
 ])
 
+function authHeaders(){
+  let token = ''
+  try { token = getEmbeddedToken() } catch(e) { /* ignore */ }
+  return token ? { 'Authorization': `Bearer ${token}` } : {}
+}
+
 async function fetchJson(url) {
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json',
+      ...authHeaders(),
     },
     cache: 'no-store',
   })
@@ -63,7 +71,7 @@ async function fetchJson(url) {
 }
 
 async function fetchRaw(url) {
-  const response = await fetch(url, { cache: 'no-store' })
+  const response = await fetch(url, { cache: 'no-store', headers: { ...authHeaders() } })
   if (response.status === 404) {
     return null
   }
@@ -179,33 +187,75 @@ export async function fetchProjects({ owner, repo, branch, projectsIndex }) {
   }
 }
 
-export async function fetchUploads({ owner, repo, branch, uploadsDir }) {
+// 簡易快取（記憶體 + localStorage）避免頻繁打 API 造成 rate limit
+// key: uploads:<owner>:<repo>:<branch>:<dir>
+const uploadsMemoryCache = new Map()
+const UPLOADS_CACHE_TTL_MS = 30_000 // 30 秒，可視需要調整
+const LOCAL_CACHE_LIMIT = 200 // 最多保留的檔案記錄數
+
+function loadLocalCache(key){
+  try {
+    const raw = localStorage.getItem(key)
+    if(!raw) return null
+    const parsed = JSON.parse(raw)
+    if(Date.now() - parsed.ts > UPLOADS_CACHE_TTL_MS) return null
+    return parsed.data
+  } catch(e){ return null }
+}
+
+function saveLocalCache(key, data){
+  try {
+    const trimmed = Array.isArray(data) ? data.slice(0, LOCAL_CACHE_LIMIT) : []
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: trimmed }))
+  } catch(e){ /* ignore */ }
+}
+
+export async function fetchUploads({ owner, repo, branch, uploadsDir, force = false }) {
+  const cacheKey = `uploads:${owner}:${repo}:${branch}:${uploadsDir}`
+  // 記憶體快取優先
+  const mem = uploadsMemoryCache.get(cacheKey)
+  if(!force && mem && (Date.now() - mem.ts) < UPLOADS_CACHE_TTL_MS){
+    return mem.data
+  }
+  // localStorage 快取次之
+  if(!force && (!mem || (Date.now() - mem.ts) >= UPLOADS_CACHE_TTL_MS)){
+    const lsData = loadLocalCache(cacheKey)
+    if(lsData){
+      uploadsMemoryCache.set(cacheKey, { ts: Date.now(), data: lsData })
+      return lsData
+    }
+  }
+
   const entries = await listDirectory({ owner, repo, branch, path: uploadsDir })
-  if (!entries.length) return []
+  if (!entries.length){
+    uploadsMemoryCache.set(cacheKey, { ts: Date.now(), data: [] })
+    saveLocalCache(cacheKey, [])
+    return []
+  }
 
   const files = entries.filter(
     (entry) => entry.type === 'file' && !entry.name.startsWith('.') && entry.download_url
   )
 
+  // 為節省大量 API call，預設不再逐檔取最新 commit 日期。改以檔名（時間戳開頭）排序。
   const enriched = await Promise.all(
     files.map(async (entry) => {
-      const updatedAt = await fetchLatestCommitDate({ owner, repo, path: entry.path })
       const extension = getExtension(entry.name)
       const isText = TEXT_EXTENSIONS.has(extension)
       let textContent
-
       if (isText && entry.size <= 64 * 1024) {
-        const rawUrl = `${RAW_BASE}/${owner}/${repo}/${branch}/${entry.path}`
-        textContent = await fetchRaw(rawUrl)
+        try {
+          const rawUrl = `${RAW_BASE}/${owner}/${repo}/${branch}/${entry.path}`
+          textContent = await fetchRaw(rawUrl)
+        } catch(e){ /* 忽略單檔錯誤 */ }
       }
-
       return {
         name: entry.name,
         path: entry.path,
         size: entry.size,
         downloadUrl: entry.download_url,
         htmlUrl: entry.html_url,
-        updatedAt,
+        updatedAt: null, // 若需要再提供 option 啟用 commit 查詢
         extension,
         isText,
         textContent,
@@ -213,7 +263,12 @@ export async function fetchUploads({ owner, repo, branch, uploadsDir }) {
     })
   )
 
-  return enriched.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
+  // 排序：若檔名符合時間戳前綴，直接字串倒序即可（ISO 格式不含冒號仍可字典序）
+  enriched.sort((a,b)=> b.name.localeCompare(a.name))
+
+  uploadsMemoryCache.set(cacheKey, { ts: Date.now(), data: enriched })
+  saveLocalCache(cacheKey, enriched)
+  return enriched
 }
 
 function getExtension(filename) {

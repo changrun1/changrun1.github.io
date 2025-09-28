@@ -58,12 +58,10 @@ const loadContent = async () => {
   return ongoingPromise
 }
 
-const refreshDownloads = async () => {
+const refreshDownloads = async ({ force = false } = {}) => {
   try {
     const { workerBase, owner, repo, branch, uploadsDir } = config.value
-  const query = ''
-
-    const refreshed = await fetchUploads({ owner, repo, branch, uploadsDir })
+    const refreshed = await fetchUploads({ owner, repo, branch, uploadsDir, force })
     downloads.value = normalizeDownloads(refreshed)
   } catch (err) {
     error.value = err instanceof Error ? err.message : '下載清單更新失敗'

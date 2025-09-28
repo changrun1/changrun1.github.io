@@ -92,12 +92,11 @@ wrangler deploy
 編輯 `src/composables/useSiteContent.js`：
 ```js
 const config = ref({
-	owner: 'your-github',
-	repo: 'your-repo',
-	branch: 'main',
-	workerBase: 'https://your-worker.workers.dev',
-	uploadsDir: 'site/uploads',
-	profilePath: 'site/content/profile/profile.json'
+  owner: 'your-github',
+  repo: 'your-repo',
+  branch: 'main',
+  workerBase: 'https://your-worker.workers.dev',
+  uploadsDir: 'site/uploads',
 })
 ```
 重新建置或直接重新整理即生效。
@@ -143,7 +142,7 @@ const config = ref({
 **為何沒有 `.env`?** 前端不需要敏感資料；敏感值在 Worker 環境變數。  
 **為何載入有時延遲?** 等待 GitHub API commit 完成；可加暫存層或 Queue。  
 **可改用其他儲存?** 可，Worker 改寫為 R2/S3 Put + 產生清單 JSON。  
-**可加登入?** 以 GitHub OAuth / Cloudflare Access / Key Header 實作。  
+**可加登入?** 可自行在 Worker 加 Header 金鑰；本版本已移除 OAuth/CMS。  
 **可支援更多語言高亮?** 引入對應 highlight.js 語言模組並註冊。
 
 ---

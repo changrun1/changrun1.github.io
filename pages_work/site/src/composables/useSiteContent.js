@@ -1,11 +1,7 @@
 import { onMounted, ref } from 'vue'
-import { fetchProfile, fetchUploads } from '../services/githubContent.js'
-import { fetchSiteContentFromWorker, fetchUploadsFromWorker } from '../services/workerContent.js'
-
-const profile = ref({
-  name: '常潤',
-  summary: '臨時分享檔案的私人工作區。',
-})
+// 只需要下載清單，不再載入 profile/posts/projects
+import { fetchUploads } from '../services/githubContent.js'
+import { fetchUploadsFromWorker } from '../services/workerContent.js'
 
 const downloads = ref([])
 const isLoading = ref(false)
@@ -17,7 +13,6 @@ const config = ref({
   branch: 'main',
   workerBase: 'https://quiet-water-7883.chang71505.workers.dev',
   uploadsDir: 'site/uploads',
-  profilePath: 'site/content/profile/profile.json',
 })
 
 let initialized = false
@@ -45,41 +40,19 @@ const loadContent = async () => {
       isLoading.value = true
       error.value = null
 
-      const { workerBase, owner, repo, branch, uploadsDir, profilePath } = config.value
-
-      let resolvedViaWorker = false
+  const { workerBase, owner, repo, branch, uploadsDir } = config.value
 
       if (workerBase) {
         try {
-          const workerData = await fetchSiteContentFromWorker({ baseUrl: workerBase })
-
-          if (workerData.profile) {
-            profile.value = {
-              ...profile.value,
-              ...workerData.profile,
-            }
-          }
-
-          downloads.value = normalizeDownloads(workerData.downloads)
-          resolvedViaWorker = true
+          const workerDownloads = await fetchUploadsFromWorker({ baseUrl: workerBase })
+          downloads.value = normalizeDownloads(workerDownloads)
         } catch (workerError) {
-          console.warn('Worker content fetch failed, fallback to GitHub direct API', workerError)
+          console.warn('Worker downloads fetch failed, fallback to GitHub direct API', workerError)
+          const downloadsData = await fetchUploads({ owner, repo, branch, uploadsDir })
+          downloads.value = normalizeDownloads(downloadsData)
         }
-      }
-
-      if (!resolvedViaWorker) {
-        const [profileData, downloadsData] = await Promise.all([
-          fetchProfile({ owner, repo, branch, profilePath }),
-          fetchUploads({ owner, repo, branch, uploadsDir }),
-        ])
-
-        if (profileData) {
-          profile.value = {
-            ...profile.value,
-            ...profileData,
-          }
-        }
-
+      } else {
+        const downloadsData = await fetchUploads({ owner, repo, branch, uploadsDir })
         downloads.value = normalizeDownloads(downloadsData)
       }
 
@@ -129,7 +102,6 @@ export function useSiteContent() {
   }
 
   return {
-    profile,
     downloads,
     isLoading,
     error,

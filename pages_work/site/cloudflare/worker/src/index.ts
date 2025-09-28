@@ -5,17 +5,10 @@ type Env = {
   GITHUB_BRANCH?: string
   MAX_FILE_SIZE?: string
   ALLOWED_EXTENSIONS?: string
-  OAUTH_SCOPE?: string
-  GITHUB_OAUTH_CLIENT_ID?: string
-  GITHUB_OAUTH_CLIENT_SECRET?: string
-  OAUTH_REDIRECT_URI?: string
 }
 
 const GITHUB_API_BASE = 'https://api.github.com'
 const RAW_BASE = 'https://raw.githubusercontent.com'
-const PROFILE_PATH = 'site/content/profile/profile.json'
-const PROJECTS_INDEX_PATH = 'site/content/projects/index.json'
-const POSTS_DIR = 'site/content/posts'
 const UPLOADS_DIR = 'site/uploads'
 const MAX_TEXT_PREVIEW_SIZE = 64 * 1024
 const TEXT_EXTENSIONS = new Set([
@@ -58,9 +51,7 @@ const TEXT_EXTENSIONS = new Set([
   'env',
 ])
 
-// 已移除頻率限制功能，保留最小結構以便未來需要時快速恢復
-// const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
-const oauthStateStore = new Map<string, number>()
+// 已移除頻率限制與 CMS/OAuth，簡化為僅提供匿名檔案/文字分享 API。
 
 type RepoContentEntry = {
   type: string
@@ -113,6 +104,7 @@ export default {
       )
     }
 
+    // /content 已不再聚合 profile/posts/projects，保留兼容性僅回傳 downloads。
     if (url.pathname === '/content' && request.method === 'GET') {
       return await handleContent(env)
     }
@@ -132,17 +124,7 @@ export default {
       return await handleUpload(request, env)
     }
 
-    if (url.pathname === '/cms/auth' && request.method === 'GET') {
-      return await startOAuth(url, env)
-    }
-
-    if (url.pathname === '/cms/callback' && request.method === 'GET') {
-      return await finishOAuth(url, env)
-    }
-
-    if (url.pathname === '/cms/auth/refresh' && request.method === 'POST') {
-      return createCorsResponse(jsonResponse({ token: null, provider: 'github' }))
-    }
+    // 所有 /cms/* 路徑已移除
 
     return createCorsResponse(jsonResponse({ message: 'Not found' }), 404)
   },
@@ -255,23 +237,19 @@ async function handleUpload(request: Request, env: Env): Promise<Response> {
 }
 
 async function handleContent(env: Env): Promise<Response> {
+  // 兼容舊前端：僅回傳 downloads
   try {
     const branch = env.GITHUB_BRANCH || 'main'
-    const [profile, posts, projects, downloads] = await Promise.all([
-      fetchProfileFromRepo(env, branch),
-      fetchPostsFromRepo(env, branch),
-      fetchProjectsFromRepo(env, branch),
-      fetchUploadsFromRepo(env, branch),
-    ])
-
+    const downloads = await fetchUploadsFromRepo(env, branch)
     const response = jsonResponse({
-      profile,
-      posts,
-      projects,
+      profile: null,
+      posts: [],
+      projects: [],
       downloads,
       fetchedAt: new Date().toISOString(),
+      legacy: true,
     })
-    response.headers.set('Cache-Control', 'public, max-age=60')
+    response.headers.set('Cache-Control', 'public, max-age=30')
     return createCorsResponse(response)
   } catch (error) {
     console.error('Content fetch error', error)
@@ -357,68 +335,7 @@ async function handleDeleteAll(env: Env): Promise<Response> {
   }
 }
 
-async function fetchProfileFromRepo(env: Env, branch: string) {
-  const file = await fetchRepoFile(env, PROFILE_PATH, branch)
-  if (!file?.content) {
-    return null
-  }
-
-  const source = decodeBase64(file.content)
-  try {
-    return JSON.parse(source)
-  } catch (error) {
-    throw new Error('無法解析 profile.json，請確認 JSON 格式是否正確。')
-  }
-}
-
-async function fetchProjectsFromRepo(env: Env, branch: string) {
-  const file = await fetchRepoFile(env, PROJECTS_INDEX_PATH, branch)
-  if (!file?.content) {
-    return []
-  }
-
-  const source = decodeBase64(file.content)
-  try {
-    const data = JSON.parse(source)
-    if (Array.isArray(data)) return data
-    if (Array.isArray(data?.projects)) return data.projects
-    return []
-  } catch (error) {
-    throw new Error('無法解析 projects/index.json，請確認 JSON 格式是否正確。')
-  }
-}
-
-async function fetchPostsFromRepo(env: Env, branch: string): Promise<RepoPost[]> {
-  const entries = await fetchRepoDirectory(env, POSTS_DIR, branch)
-  if (!entries.length) {
-    return []
-  }
-
-  const markdownFiles = entries.filter((entry) => entry.type === 'file' && entry.name.endsWith('.md'))
-
-  const posts = await Promise.all(
-    markdownFiles.map(async (entry) => {
-      const file = await fetchRepoFile(env, entry.path, branch)
-      if (!file?.content) {
-        return null
-      }
-      const source = decodeBase64(file.content)
-      const updatedAt = await fetchLatestCommitDate(env, entry.path)
-      return {
-        slug: entry.name.replace(/\.md$/i, ''),
-        path: entry.path,
-        name: entry.name,
-        content: source,
-        downloadUrl: entry.download_url ?? buildRawUrl(env, entry.path, branch),
-        updatedAt,
-      }
-    })
-  )
-
-  return posts
-    .filter((post): post is RepoPost => Boolean(post))
-    .sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
-}
+// 已刪除：fetchProfileFromRepo / fetchProjectsFromRepo / fetchPostsFromRepo
 
 async function fetchUploadsFromRepo(
   env: Env,
@@ -562,89 +479,7 @@ function buildRawUrl(env: Env, path: string, branch: string): string {
   return `${RAW_BASE}/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/${branch}/${path}`
 }
 
-async function startOAuth(url: URL, env: Env): Promise<Response> {
-  if (!env.GITHUB_OAUTH_CLIENT_ID || !env.OAUTH_REDIRECT_URI) {
-    return createCorsResponse(
-      jsonResponse({ message: '尚未設定 GitHub OAuth Client ID 或 Redirect URI。' }),
-      500
-    )
-  }
-
-  const state = crypto.randomUUID()
-  oauthStateStore.set(state, Date.now())
-  cleanupOAuthState()
-
-  const params = new URLSearchParams({
-    client_id: env.GITHUB_OAUTH_CLIENT_ID,
-    redirect_uri: env.OAUTH_REDIRECT_URI,
-    scope: env.OAUTH_SCOPE ?? 'repo',
-    state,
-    allow_signup: 'false',
-  })
-
-  const authorizeUrl = `https://github.com/login/oauth/authorize?${params.toString()}`
-  return createCorsResponse(Response.redirect(authorizeUrl, 302))
-}
-
-async function finishOAuth(url: URL, env: Env): Promise<Response> {
-  const code = url.searchParams.get('code')
-  const state = url.searchParams.get('state')
-
-  if (!code || !state) {
-    return htmlResponse('<p>缺少授權參數，請重新嘗試。</p>', 400)
-  }
-
-  if (!oauthStateStore.has(state)) {
-    return htmlResponse('<p>授權已逾時，請重新登入。</p>', 400)
-  }
-
-  oauthStateStore.delete(state)
-
-  if (!env.GITHUB_OAUTH_CLIENT_ID || !env.GITHUB_OAUTH_CLIENT_SECRET || !env.OAUTH_REDIRECT_URI) {
-    return htmlResponse('<p>OAuth 設定尚未完成。</p>', 500)
-  }
-
-  const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      client_id: env.GITHUB_OAUTH_CLIENT_ID,
-      client_secret: env.GITHUB_OAUTH_CLIENT_SECRET,
-      code,
-      redirect_uri: env.OAUTH_REDIRECT_URI,
-      state,
-    }),
-  })
-
-  if (!tokenResponse.ok) {
-    const message = await tokenResponse.text()
-    return htmlResponse(`<p>GitHub 授權失敗：${escapeHtml(message)}</p>`, 500)
-  }
-
-  const tokenData = await tokenResponse.json()
-  if (!tokenData.access_token) {
-    return htmlResponse('<p>無法取得存取權杖。</p>', 500)
-  }
-
-  const html = `<!doctype html><html><body><script>
-    (function() {
-      function sendMessage() {
-        if (window.opener) {
-          window.opener.postMessage(${JSON.stringify(`authorization:github:${tokenData.access_token}`)}, '*');
-          window.close();
-        } else {
-          document.body.innerText = 'Authentication complete. You can close this window.';
-        }
-      }
-      sendMessage();
-    })();
-  </script></body></html>`
-
-  return htmlResponse(html)
-}
+// 已刪除：startOAuth / finishOAuth 及相關 HTML 回傳用於 CMS 驗證
 
 async function commitFileToGitHub({
   env,
@@ -762,15 +597,7 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#039;')
 }
 
-function cleanupOAuthState() {
-  const ttl = 5 * 60 * 1000
-  const now = Date.now()
-  for (const [key, createdAt] of oauthStateStore.entries()) {
-    if (now - createdAt > ttl) {
-      oauthStateStore.delete(key)
-    }
-  }
-}
+// 已刪除：OAuth state 清理邏輯
 
 function sanitizeFilename(filename: string): string {
   const normalized = typeof filename === 'string' ? filename.normalize('NFKC') : 'file'

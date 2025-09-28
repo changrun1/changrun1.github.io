@@ -218,7 +218,14 @@ const handleSubmit = async () => {
     if (props.uploadProvider && !props.endpoint) {
       // Provider 模式
       const effectiveExt = form.textExt === 'custom' ? form.customTextExt : form.textExt
-      const result = await props.uploadProvider.upload({
+      // 兼容傳入為 ref / computed 或直接物件
+      const prov = (props.uploadProvider && typeof props.uploadProvider === 'object' && 'value' in props.uploadProvider)
+        ? props.uploadProvider.value
+        : props.uploadProvider
+      if (!prov || typeof prov.upload !== 'function') {
+        throw new Error('上傳 provider 尚未就緒（缺 upload 方法）')
+      }
+      const result = await prov.upload({
         file: form.file,
         message: mode.value === 'text' ? form.message : '',
         customName: form.customName,

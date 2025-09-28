@@ -17,7 +17,14 @@
             <option value="md">.md</option>
           </select>
         </div>
-        <textarea v-model="form.message" class="min-h-[240px] w-full rounded-2xl border border-slate-200 bg-white/90 px-5 py-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200" placeholder="輸入文字內容" maxlength="5000" />
+        <textarea
+          v-model="form.message"
+          ref="messageInput"
+          @input="autoGrow"
+          class="min-h-[240px] w-full resize-none rounded-2xl border border-slate-200 bg-white/90 px-5 py-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          placeholder="輸入文字內容 (支援多行、會自動伸縮)"
+          maxlength="5000"
+        />
         <div class="flex justify-between text-xs text-slate-400">
           <span>最多 5000 字元</span>
           <span v-if="form.message.length">{{ form.message.length }}/5000</span>
@@ -57,7 +64,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 
 const props = defineProps({
   endpoint: {
@@ -95,6 +102,7 @@ const activeTabClass = 'rounded-full border px-4 py-1 bg-slate-900 text-white bo
 const fileInput = ref(null)
 const isSubmitting = ref(false)
 const feedback = reactive({ type: '', message: '' })
+const messageInput = ref(null)
 
 const acceptAttr = computed(() => (props.acceptedTypes.length ? props.acceptedTypes.join(',') : undefined))
 
@@ -123,6 +131,7 @@ const resetForm = () => {
   if (fileInput.value) {
     fileInput.value.value = ''
   }
+  nextTickAutoGrow()
 }
 
 const handleFileChange = (event) => {
@@ -133,6 +142,7 @@ const handleFileChange = (event) => {
     // 清空文字區以維持互斥
     form.message = ''
   }
+  nextTickAutoGrow()
 }
 
 const handleSubmit = async () => {
@@ -197,4 +207,18 @@ const handleSubmit = async () => {
     isSubmitting.value = false
   }
 }
+
+function autoGrow(){
+  if(!messageInput.value) return
+  const el = messageInput.value
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 800) + 'px'
+}
+
+function nextTickAutoGrow(){
+  requestAnimationFrame(()=> autoGrow())
+}
+
+onMounted(()=>{ autoGrow() })
+watch(()=> form.message, ()=> autoGrow())
 </script>

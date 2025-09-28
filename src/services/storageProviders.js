@@ -67,7 +67,7 @@ function createGitHubDirectProvider({ owner, repo, branch = 'main', tokenParts =
     }
   }
 
-  const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/site/uploads`
+  const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/uploads`
   const stdHeaders = () => ({
     'Authorization': `Bearer ${token}`,
     'Accept': 'application/vnd.github+json',
@@ -221,7 +221,7 @@ function createEmbeddedGitHubProvider({ owner, repo, branch = 'main' }) {
       async deleteAll() { throw new Error('缺參數') },
     }
   }
-  const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/site/uploads`
+  const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/uploads`
   const stdHeaders = () => ({
     'Authorization': `Bearer ${token}`,
     'Accept': 'application/vnd.github+json',

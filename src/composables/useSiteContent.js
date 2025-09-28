@@ -12,7 +12,7 @@ const config = ref({
   repo: 'changrun1.github.io',
   branch: 'main',
   workerBase: '', // 移除預設 worker，改走直接 GitHub 方案
-  uploadsDir: 'site/uploads',
+  uploadsDir: 'uploads',
 })
 
 let initialized = false

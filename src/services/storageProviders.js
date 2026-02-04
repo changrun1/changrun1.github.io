@@ -58,7 +58,8 @@ function createS3Provider() {
     let contentType = 'application/octet-stream';
 
     if (file instanceof File) {
-      body = file;
+      const buf = await file.arrayBuffer();
+      body = new Uint8Array(buf);
       contentType = file.type || 'application/octet-stream';
     } else {
       body = message;

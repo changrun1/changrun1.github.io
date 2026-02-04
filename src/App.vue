@@ -48,7 +48,7 @@ const activeLabel = computed(() => {
         <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-2 text-[11px] leading-tight text-slate-500 sm:px-6">
           <span>© {{ new Date().getFullYear() }} 常潤</span>
           <span class="flex items-center gap-2">
-            <span class="hidden sm:inline">Cloudflare Worker · GitHub</span>
+            <span class="hidden sm:inline">Oracle S3 Direct</span>
             <RouterLink to="/manage" class="text-[10px] text-slate-400 hover:text-slate-600" title="管理">manage</RouterLink>
           </span>
         </div>

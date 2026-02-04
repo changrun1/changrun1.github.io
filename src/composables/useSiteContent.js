@@ -1,19 +1,11 @@
 import { onMounted, ref } from 'vue'
-// 只需要下載清單，不再載入 profile/posts/projects
-import { fetchUploads } from '../services/githubContent.js'
-import { fetchUploadsFromWorker } from '../services/workerContent.js'
+import { listProviders } from '../services/storageProviders.js'
 
 const downloads = ref([])
 const isLoading = ref(false)
 const error = ref(null)
 
-const config = ref({
-  owner: 'changrun1',
-  repo: 'changrun1.github.io',
-  branch: 'main',
-  workerBase: '', // 移除預設 worker，改走直接 GitHub 方案
-  uploadsDir: 'uploads',
-})
+const config = ref({})
 
 let initialized = false
 let ongoingPromise = null
@@ -25,7 +17,6 @@ const normalizeDownloads = (list = []) => {
       ...item,
       extension: typeof item.extension === 'string' ? item.extension : '',
       isText: Boolean(item.isText),
-      textContent: typeof item.textContent === 'string' ? item.textContent : undefined,
     }))
     .sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
 }
@@ -40,15 +31,19 @@ const loadContent = async () => {
       isLoading.value = true
       error.value = null
 
-  const { workerBase, owner, repo, branch, uploadsDir } = config.value
+      // Use the first available provider (S3)
+      const providers = listProviders()
+      const provider = providers[0]
 
-      // 直接使用 GitHub API
-      const downloadsData = await fetchUploads({ owner, repo, branch, uploadsDir })
+      if (!provider) throw new Error('沒有可用的儲存提供者')
+
+      const downloadsData = await provider.list()
       downloads.value = normalizeDownloads(downloadsData)
 
       initialized = true
     } catch (err) {
       error.value = err instanceof Error ? err.message : '發生未知錯誤'
+      console.error(err)
     } finally {
       isLoading.value = false
       ongoingPromise = null
@@ -58,11 +53,14 @@ const loadContent = async () => {
   return ongoingPromise
 }
 
-const refreshDownloads = async ({ force = false } = {}) => {
+const refreshDownloads = async () => {
   try {
-    const { workerBase, owner, repo, branch, uploadsDir } = config.value
-    const refreshed = await fetchUploads({ owner, repo, branch, uploadsDir, force })
-    downloads.value = normalizeDownloads(refreshed)
+    const providers = listProviders()
+    const provider = providers[0]
+    if (provider) {
+      const refreshed = await provider.list()
+      downloads.value = normalizeDownloads(refreshed)
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : '下載清單更新失敗'
   }
